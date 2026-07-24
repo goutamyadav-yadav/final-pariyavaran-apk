@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import {
+  ActivityIndicator,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -9,6 +10,7 @@ import {
 import LinearGradient from 'react-native-linear-gradient';
 import AppIcon, { IconName } from '../components/AppIcon';
 import { getBottomInset, getTopInset } from '../utils/layout';
+import { ApiError, greenSelfiesService } from '../api';
 
 type Props = {
   onBack: () => void;
@@ -21,8 +23,35 @@ const CATEGORIES = [
   'Paryavaran Mitra',
 ];
 
+/** Placeholder image URL — media upload API does not exist yet */
+const SELFIE_PLACEHOLDER_URL =
+  'https://via.placeholder.com/600x800.png?text=Green+Selfie';
+
 export default function GreenSelfieScreen({ onBack }: Props) {
   const [activeCategory, setActiveCategory] = useState('Eco Hero');
+  const [submitting, setSubmitting] = useState(false);
+  const [statusMsg, setStatusMsg] = useState('');
+
+  const handleTakeSelfie = async () => {
+    if (submitting) return;
+    setSubmitting(true);
+    setStatusMsg('');
+    try {
+      await greenSelfiesService.create({
+        category: activeCategory,
+        imageUrl: SELFIE_PLACEHOLDER_URL,
+      });
+      setStatusMsg('Green selfie saved successfully.');
+    } catch (error) {
+      setStatusMsg(
+        error instanceof ApiError
+          ? error.message
+          : 'Failed to save green selfie',
+      );
+    } finally {
+      setSubmitting(false);
+    }
+  };
 
   return (
     <View style={styles.root}>
@@ -105,15 +134,25 @@ export default function GreenSelfieScreen({ onBack }: Props) {
           </View>
         </View>
 
-        <Pressable style={styles.takeSelfieBtnWrap}>
+        <Pressable
+          style={styles.takeSelfieBtnWrap}
+          onPress={handleTakeSelfie}
+          disabled={submitting}>
           <LinearGradient
             colors={['#7dd3a0', '#44b969']}
             start={{ x: 0, y: 0.5 }}
             end={{ x: 1, y: 0.5 }}
             style={styles.takeSelfieBtn}>
-            <Text style={styles.takeSelfieBtnText}>📷  Take Selfie</Text>
+            {submitting ? (
+              <ActivityIndicator color="#fff" />
+            ) : (
+              <Text style={styles.takeSelfieBtnText}>📷  Take Selfie</Text>
+            )}
           </LinearGradient>
         </Pressable>
+        {statusMsg ? (
+          <Text style={styles.statusMsg}>{statusMsg}</Text>
+        ) : null}
       </ScrollView>
     </View>
   );
@@ -270,5 +309,11 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 16,
     fontWeight: '800',
+  },
+  statusMsg: {
+    marginTop: 12,
+    textAlign: 'center',
+    fontSize: 13,
+    color: '#126e35',
   },
 });

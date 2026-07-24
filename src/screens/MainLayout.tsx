@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { View, StyleSheet, BackHandler } from 'react-native';
+import React, { useCallback, useEffect, useState } from 'react';
+import { View, StyleSheet, BackHandler, ActivityIndicator, Text } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import DashboardScreen from './DashboardScreen';
 import VehiclesScreen from './VehiclesScreen';
@@ -23,12 +23,19 @@ import BottomNav from '../components/BottomNav';
 import {
   AddedVehicle,
   createVehicleFromAdded,
-  INITIAL_VEHICLES,
   Vehicle,
 } from '../data/vehiclesData';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { RootStackParamList } from '../navigation/types';
+import {
+  ApiError,
+  authService,
+  clearSession,
+  getRefreshToken,
+  vehiclesService,
+} from '../api';
+import { mapApiVehicleToUi } from '../api/mappers';
 
 type Tab = 'home' | 'vehicles' | 'map' | 'ranks' | 'profile';
 
@@ -50,14 +57,38 @@ export default function MainLayout() {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const [activeTab, setActiveTab] = useState<Tab>('home');
   const [overlay, setOverlay] = useState<OverlayScreen | null>(null);
-  const [vehicles, setVehicles] = useState<Vehicle[]>(INITIAL_VEHICLES);
+  const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [selectedVehicle, setSelectedVehicle] = useState<Vehicle | null>(null);
-  
+  const [loadingVehicles, setLoadingVehicles] = useState(true);
+  const [vehiclesError, setVehiclesError] = useState('');
+
   const route = useRoute<RouteProp<RootStackParamList, 'MainLayout'>>();
   const phoneNumber = route.params?.phoneNumber;
   const isMitra = phoneNumber === '8817678133';
-  
+
   const insets = useSafeAreaInsets();
+
+  const loadVehicles = useCallback(async () => {
+    setLoadingVehicles(true);
+    setVehiclesError('');
+    try {
+      const list = await vehiclesService.list();
+      setVehicles(list.map(mapApiVehicleToUi));
+    } catch (error) {
+      const message =
+        error instanceof ApiError
+          ? error.message
+          : 'Failed to load vehicles';
+      setVehiclesError(message);
+      setVehicles([]);
+    } finally {
+      setLoadingVehicles(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadVehicles();
+  }, [loadVehicles]);
 
   useEffect(() => {
     const onBackPress = () => {
@@ -69,10 +100,13 @@ export default function MainLayout() {
         setActiveTab('home');
         return true;
       }
-      return false; // let the system handle it (close app) if on home tab
+      return false;
     };
 
-    const subscription = BackHandler.addEventListener('hardwareBackPress', onBackPress);
+    const subscription = BackHandler.addEventListener(
+      'hardwareBackPress',
+      onBackPress,
+    );
     return () => subscription.remove();
   }, [overlay, activeTab]);
 
@@ -102,22 +136,40 @@ export default function MainLayout() {
   const handleAddVehicleComplete = () => {
     closeOverlay();
     setActiveTab('vehicles');
+    loadVehicles();
+  };
+
+  const handleLogout = async () => {
+    try {
+      const refreshToken = await getRefreshToken();
+      if (refreshToken) {
+        await authService.logout(refreshToken);
+      }
+    } catch {
+      // Clear local session even if logout API fails
+    } finally {
+      await clearSession();
+      navigation.reset({
+        index: 0,
+        routes: [{ name: 'Login' }],
+      });
+    }
   };
 
   const renderScreen = () => {
+    if (loadingVehicles && activeTab === 'vehicles') {
+      return (
+        <View style={styles.centered}>
+          <ActivityIndicator size="large" color="#136e35" />
+          <Text style={styles.loadingText}>Loading vehicles…</Text>
+        </View>
+      );
+    }
+
     switch (activeTab) {
       case 'home':
         if (isMitra) {
-          return (
-            <MitraDashboardScreen 
-              onLogout={() => {
-                navigation.reset({
-                  index: 0,
-                  routes: [{ name: 'Login' }],
-                });
-              }} 
-            />
-          );
+          return <MitraDashboardScreen onLogout={handleLogout} />;
         }
         return (
           <DashboardScreen
@@ -151,12 +203,7 @@ export default function MainLayout() {
         return (
           <ProfileScreen
             vehicles={vehicles}
-            onLogout={() => {
-              navigation.reset({
-                index: 0,
-                routes: [{ name: 'Login' }],
-              });
-            }}
+            onLogout={handleLogout}
             onMyVehicles={() => setActiveTab('vehicles')}
             onVehicleIdentity={() => setOverlay('identity')}
             onRashiVan={() => setOverlay('rashiVan')}
@@ -230,13 +277,21 @@ export default function MainLayout() {
     }
   };
 
-
   if (overlay) {
-    return <View style={[styles.root, { paddingBottom: insets.bottom }]}>{renderOverlay()}</View>;
+    return (
+      <View style={[styles.root, { paddingBottom: insets.bottom }]}>
+        {renderOverlay()}
+      </View>
+    );
   }
 
   return (
     <View style={[styles.root, { paddingBottom: insets.bottom }]}>
+      {vehiclesError && activeTab === 'home' ? (
+        <View style={styles.banner}>
+          <Text style={styles.bannerText}>{vehiclesError}</Text>
+        </View>
+      ) : null}
       {renderScreen()}
       <BottomNav activeTab={activeTab} onTabChange={setActiveTab} />
     </View>
@@ -247,5 +302,25 @@ const styles = StyleSheet.create({
   root: {
     flex: 1,
     backgroundColor: '#f4f9f4',
+  },
+  centered: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 12,
+  },
+  loadingText: {
+    color: '#6b7280',
+    fontSize: 14,
+  },
+  banner: {
+    backgroundColor: '#fef2f2',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+  },
+  bannerText: {
+    color: '#b91c1c',
+    fontSize: 12,
+    textAlign: 'center',
   },
 });

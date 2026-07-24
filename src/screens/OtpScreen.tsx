@@ -1,5 +1,6 @@
 import React, { useMemo, useRef, useState } from 'react';
 import {
+  ActivityIndicator,
   Dimensions,
   KeyboardAvoidingView,
   Platform,
@@ -15,6 +16,7 @@ import { getBottomInset, getTopInset } from '../utils/layout';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RouteProp, useNavigation, useRoute } from '@react-navigation/native';
 import { RootStackParamList } from '../navigation/types';
+import { ApiError, authService, saveSession } from '../api';
 
 const OTP_LENGTH = 4;
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
@@ -39,6 +41,7 @@ export default function OtpScreen() {
   const [otp, setOtp] = useState('');
   const [touched, setTouched] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
+  const [loading, setLoading] = useState(false);
   const inputRef = useRef<TextInput>(null);
 
   const isValid = otp.length === OTP_LENGTH;
@@ -57,17 +60,35 @@ export default function OtpScreen() {
     setOtp(cleaned);
   };
 
-  const handleVerify = () => {
+  const handleVerify = async () => {
     setTouched(true);
-    if (!isValid) return;
+    if (!isValid || loading) return;
 
-    if (otp === '1234') {
+    setLoading(true);
+    setErrorMsg('');
+    try {
+      const result = await authService.verifyOtp({
+        phone: phoneNumber,
+        code: otp,
+      });
+      await saveSession({
+        accessToken: result.accessToken,
+        refreshToken: result.refreshToken,
+        user: result.user,
+        phone: phoneNumber,
+      });
       navigation.reset({
         index: 0,
         routes: [{ name: 'MainLayout', params: { phoneNumber } }],
       });
-    } else {
-      setErrorMsg('Invalid OTP. Please try 1234');
+    } catch (error) {
+      const message =
+        error instanceof ApiError
+          ? error.message
+          : 'Invalid OTP. Please try again.';
+      setErrorMsg(message);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -144,7 +165,7 @@ export default function OtpScreen() {
 
             <Pressable
               onPress={handleVerify}
-              disabled={!isValid}
+              disabled={!isValid || loading}
               style={({ pressed }) => [
                 styles.buttonOuter,
                 isValid && pressed && { opacity: 0.8 },
@@ -153,11 +174,15 @@ export default function OtpScreen() {
               {isValid ? (
                 <LinearGradient
                   colors={[COLORS.gradientStart, COLORS.gradientEnd]}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 0 }}
+                  start={{ x: 0, y: 0.5 }}
+                  end={{ x: 1, y: 0.5 }}
                   style={styles.buttonInner}
                 >
-                  <Text style={styles.buttonText}>Verify & Continue</Text>
+                  {loading ? (
+                    <ActivityIndicator color="#fff" />
+                  ) : (
+                    <Text style={styles.buttonText}>Verify & Continue</Text>
+                  )}
                 </LinearGradient>
               ) : (
                 <View style={[styles.buttonInner, styles.buttonDisabled]}>

@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import {
+  ActivityIndicator,
   Dimensions,
   KeyboardAvoidingView,
   Platform,
@@ -15,6 +16,7 @@ import { getBottomInset, getTopInset } from '../utils/layout';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useNavigation } from '@react-navigation/native';
 import { RootStackParamList } from '../navigation/types';
+import { ApiError, authService } from '../api';
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 
@@ -37,6 +39,7 @@ export default function LoginScreen() {
   const [phone, setPhone] = useState('');
   const [touched, setTouched] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
+  const [loading, setLoading] = useState(false);
 
   const digitsOnly = phone.replace(/\D/g, '');
   const isValid = digitsOnly.length === 10;
@@ -53,14 +56,23 @@ export default function LoginScreen() {
     setPhone(value);
   };
 
-  const handleSendOtp = () => {
+  const handleSendOtp = async () => {
     setTouched(true);
-    if (!isValid) return;
+    if (!isValid || loading) return;
 
-    if (digitsOnly === '9826012345' || digitsOnly === '8817678133') {
+    setLoading(true);
+    setErrorMsg('');
+    try {
+      await authService.requestOtp({ phone: digitsOnly });
       navigation.navigate('Otp', { phoneNumber: digitsOnly });
-    } else {
-      setErrorMsg('This number is not registered. Try 98260 12345 or 8817678133');
+    } catch (error) {
+      const message =
+        error instanceof ApiError
+          ? error.message
+          : 'Failed to send OTP. Please try again.';
+      setErrorMsg(message);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -130,7 +142,7 @@ export default function LoginScreen() {
             {/* SEND OTP BUTTON */}
             <Pressable
               onPress={handleSendOtp}
-              disabled={!isValid}
+              disabled={!isValid || loading}
               style={({ pressed }) => [
                 styles.buttonOuter,
                 isValid && pressed && { opacity: 0.8 },
@@ -143,7 +155,11 @@ export default function LoginScreen() {
                   end={{ x: 1, y: 0 }}
                   style={styles.buttonInner}
                 >
-                  <Text style={styles.buttonText}>Send OTP</Text>
+                  {loading ? (
+                    <ActivityIndicator color="#fff" />
+                  ) : (
+                    <Text style={styles.buttonText}>Send OTP</Text>
+                  )}
                 </LinearGradient>
               ) : (
                 <View style={[styles.buttonInner, styles.buttonDisabled]}>
