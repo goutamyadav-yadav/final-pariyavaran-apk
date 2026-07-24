@@ -12,12 +12,9 @@ import {
 } from 'react-native';
 import LinearGradient from 'react-native-linear-gradient';
 import { getBottomInset, getTopInset } from '../utils/layout';
-
-type Props = {
-  phoneNumber: string;
-  onBack: () => void;
-  onVerify: () => void;
-};
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { RouteProp, useNavigation, useRoute } from '@react-navigation/native';
+import { RootStackParamList } from '../navigation/types';
 
 const OTP_LENGTH = 4;
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
@@ -35,7 +32,10 @@ const COLORS = {
   error: '#d32f2f',
 };
 
-export default function OtpScreen({ phoneNumber, onBack, onVerify }: Props) {
+export default function OtpScreen() {
+  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
+  const route = useRoute<RouteProp<RootStackParamList, 'Otp'>>();
+  const { phoneNumber } = route.params;
   const [otp, setOtp] = useState('');
   const [touched, setTouched] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
@@ -62,7 +62,10 @@ export default function OtpScreen({ phoneNumber, onBack, onVerify }: Props) {
     if (!isValid) return;
 
     if (otp === '1234') {
-      onVerify();
+      navigation.reset({
+        index: 0,
+        routes: [{ name: 'MainLayout', params: { phoneNumber } }],
+      });
     } else {
       setErrorMsg('Invalid OTP. Please try 1234');
     }
@@ -80,7 +83,7 @@ export default function OtpScreen({ phoneNumber, onBack, onVerify }: Props) {
 
       {/* BACK BUTTON (Absolute at top) */}
       <Pressable
-        onPress={onBack}
+        onPress={() => navigation.goBack()}
         style={[styles.backBtn, { top: getTopInset(20) }]}
       >
         <Text style={styles.backText}>← Back</Text>
@@ -164,7 +167,7 @@ export default function OtpScreen({ phoneNumber, onBack, onVerify }: Props) {
             </Pressable>
 
             <View style={styles.resendRow}>
-              <Pressable onPress={onBack}>
+              <Pressable onPress={() => navigation.goBack()}>
                 <Text style={styles.resendText}>Change number</Text>
               </Pressable>
             </View>

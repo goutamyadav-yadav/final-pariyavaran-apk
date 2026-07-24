@@ -12,10 +12,9 @@ import {
 } from 'react-native';
 import LinearGradient from 'react-native-linear-gradient';
 import { getBottomInset, getTopInset } from '../utils/layout';
-
-type Props = {
-  onSendOtp: (phoneNumber: string) => void;
-};
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { useNavigation } from '@react-navigation/native';
+import { RootStackParamList } from '../navigation/types';
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 
@@ -33,7 +32,8 @@ const COLORS = {
   error: '#d32f2f',
 };
 
-export default function LoginScreen({ onSendOtp }: Props) {
+export default function LoginScreen() {
+  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const [phone, setPhone] = useState('');
   const [touched, setTouched] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
@@ -57,10 +57,10 @@ export default function LoginScreen({ onSendOtp }: Props) {
     setTouched(true);
     if (!isValid) return;
 
-    if (digitsOnly === '9826012345') {
-      onSendOtp(digitsOnly);
+    if (digitsOnly === '9826012345' || digitsOnly === '8817678133') {
+      navigation.navigate('Otp', { phoneNumber: digitsOnly });
     } else {
-      setErrorMsg('This number is not registered. Try 98260 12345');
+      setErrorMsg('This number is not registered. Try 98260 12345 or 8817678133');
     }
   };
 
@@ -90,7 +90,7 @@ export default function LoginScreen({ onSendOtp }: Props) {
               <Text style={styles.logoLeaf}>🌿</Text>
             </View>
             <View>
-              <Text style={styles.brandName}>Paryavaran Prahri</Text>
+              <Text style={styles.brandName}>Prayavarn Prehri</Text>
               <Text style={styles.brandTagline}>Drive Green. Grow Future.</Text>
             </View>
           </View>

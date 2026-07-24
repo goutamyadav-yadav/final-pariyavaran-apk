@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
-import { View, StyleSheet } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { View, StyleSheet, BackHandler } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import DashboardScreen from './DashboardScreen';
 import VehiclesScreen from './VehiclesScreen';
 import ProfileScreen from './ProfileScreen';
@@ -13,6 +14,7 @@ import RashiVanScreen from './RashiVanScreen';
 import NewsScreen from './NewsScreen';
 import SupportScreen from './SupportScreen';
 import MitraScreen from './MitraScreen';
+import MitraDashboardScreen from './MitraDashboardScreen';
 import OfferLandScreen from './OfferLandScreen';
 import AboutInitiativeScreen from './AboutInitiativeScreen';
 import AdminPreviewScreen from './AdminPreviewScreen';
@@ -24,10 +26,9 @@ import {
   INITIAL_VEHICLES,
   Vehicle,
 } from '../data/vehiclesData';
-
-interface MainLayoutProps {
-  onLogout: () => void;
-}
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
+import { RootStackParamList } from '../navigation/types';
 
 type Tab = 'home' | 'vehicles' | 'map' | 'ranks' | 'profile';
 
@@ -45,11 +46,35 @@ type OverlayScreen =
   | 'adminPreview'
   | 'vehicleDetail';
 
-export default function MainLayout({ onLogout }: MainLayoutProps) {
+export default function MainLayout() {
+  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const [activeTab, setActiveTab] = useState<Tab>('home');
   const [overlay, setOverlay] = useState<OverlayScreen | null>(null);
   const [vehicles, setVehicles] = useState<Vehicle[]>(INITIAL_VEHICLES);
   const [selectedVehicle, setSelectedVehicle] = useState<Vehicle | null>(null);
+  
+  const route = useRoute<RouteProp<RootStackParamList, 'MainLayout'>>();
+  const phoneNumber = route.params?.phoneNumber;
+  const isMitra = phoneNumber === '8817678133';
+  
+  const insets = useSafeAreaInsets();
+
+  useEffect(() => {
+    const onBackPress = () => {
+      if (overlay) {
+        closeOverlay();
+        return true;
+      }
+      if (activeTab !== 'home') {
+        setActiveTab('home');
+        return true;
+      }
+      return false; // let the system handle it (close app) if on home tab
+    };
+
+    const subscription = BackHandler.addEventListener('hardwareBackPress', onBackPress);
+    return () => subscription.remove();
+  }, [overlay, activeTab]);
 
   const closeOverlay = () => {
     setOverlay(null);
@@ -82,6 +107,18 @@ export default function MainLayout({ onLogout }: MainLayoutProps) {
   const renderScreen = () => {
     switch (activeTab) {
       case 'home':
+        if (isMitra) {
+          return (
+            <MitraDashboardScreen 
+              onLogout={() => {
+                navigation.reset({
+                  index: 0,
+                  routes: [{ name: 'Login' }],
+                });
+              }} 
+            />
+          );
+        }
         return (
           <DashboardScreen
             vehicles={vehicles}
@@ -114,7 +151,12 @@ export default function MainLayout({ onLogout }: MainLayoutProps) {
         return (
           <ProfileScreen
             vehicles={vehicles}
-            onLogout={onLogout}
+            onLogout={() => {
+              navigation.reset({
+                index: 0,
+                routes: [{ name: 'Login' }],
+              });
+            }}
             onMyVehicles={() => setActiveTab('vehicles')}
             onVehicleIdentity={() => setOverlay('identity')}
             onRashiVan={() => setOverlay('rashiVan')}
@@ -188,12 +230,13 @@ export default function MainLayout({ onLogout }: MainLayoutProps) {
     }
   };
 
+
   if (overlay) {
-    return <View style={styles.root}>{renderOverlay()}</View>;
+    return <View style={[styles.root, { paddingBottom: insets.bottom }]}>{renderOverlay()}</View>;
   }
 
   return (
-    <View style={styles.root}>
+    <View style={[styles.root, { paddingBottom: insets.bottom }]}>
       {renderScreen()}
       <BottomNav activeTab={activeTab} onTabChange={setActiveTab} />
     </View>
